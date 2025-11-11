@@ -28,7 +28,7 @@ Used as a secure web entry point for the platform. It enables HTTPS termination,
 Automated One-Command Installation
 
 # Download and execute the deployment script
-wget -O deploy.sh https://raw.githubusercontent.com/your-repo/thehive-cortex-deploy/master/deploy.sh
+wget -O deploy.sh https://raw.githubusercontent.com/mohamadyaghoobii/thehive-cortex-deploy/master/deploy.sh
 chmod +x deploy.sh
 sudo ./deploy.sh
 What Gets Installed
