@@ -6,7 +6,7 @@ https://img.shields.io/badge/License-MIT-orange
 A complete, production-ready deployment of TheHive 5.2.16 and Cortex 3.1.8 for Security Operations Centers. This automated deployment provides a robust incident response and threat analysis platform.
 
 🏗️ Architecture Overview
-text
+
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   TheHive 5.2   │    │   Cortex 3.1    │    │   Web Interface  │
 │   Port: 9000    │◄──►│   Port: 9001    │    │   Port: 80/443   │
