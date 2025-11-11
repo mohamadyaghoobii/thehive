@@ -1,0 +1,47 @@
+[Unit]
+Description=Cortex 3.1.8
+Documentation=https://thehive-project.org
+After=network.target elasticsearch.service
+Wants=network.target elasticsearch.service
+
+[Service]
+Type=simple
+User=cortex
+Group=cortex
+WorkingDirectory=/opt/cortex
+
+# Environment variables
+Environment="JAVA_OPTS=-Xms512m -Xmx1g -XX:+UseG1GC"
+Environment="CONFIG_FILE=/etc/cortex/application.conf"
+
+# File descriptor limit
+LimitNOFILE=65536
+
+# Security - no new privileges
+NoNewPrivileges=yes
+
+# Process configuration
+ExecStart=/opt/cortex/bin/cortex \
+  -Dconfig.file=/etc/cortex/application.conf \
+  -Dlogger.file=/etc/cortex/logback.xml \
+  -Dpidfile.path=/dev/null
+
+# Standard output/error
+StandardOutput=journal
+StandardError=journal
+
+# Restart configuration
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Timeout settings
+TimeoutStartSec=300
+TimeoutStopSec=30
+
+# Exit status
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

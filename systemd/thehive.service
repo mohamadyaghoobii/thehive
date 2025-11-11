@@ -1,0 +1,42 @@
+[Unit]
+Description=TheHive 5.2.16
+Documentation=https://thehive-project.org
+After=network.target elasticsearch.service cassandra.service
+Wants=elasticsearch.service cassandra.service
+
+[Service]
+Type=simple
+User=thehive
+Group=thehive
+WorkingDirectory=/opt/thehive
+
+# Environment variables
+Environment="JAVA_OPTS=-Xms1g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+Environment="CONFIG_FILE=/etc/thehive/application.conf"
+
+# File descriptor limit
+LimitNOFILE=65536
+
+# Security - no new privileges
+NoNewPrivileges=yes
+
+# Process configuration
+ExecStart=/opt/thehive/bin/thehive \
+  -Dconfig.file=/etc/thehive/application.conf \
+  -Dhttp.address=0.0.0.0 \
+  -Dhttp.port=9000 \
+  -Dplay.server.pidfile.path=/dev/null \
+  -Dlogger.file=/opt/thehive/conf/logback.xml
+
+# Restart configuration
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Timeout settings
+TimeoutStartSec=300
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
