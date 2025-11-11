@@ -5,24 +5,9 @@ https://img.shields.io/badge/License-MIT-orange
 
 A complete, production-ready deployment of TheHive 5.2.16 and Cortex 3.1.8 for Security Operations Centers. This automated deployment provides a robust incident response and threat analysis platform.
 
-🏗️ Architecture Overview
 
-The deployment consists of five core components that together provide a scalable, reliable, and operationally efficient incident response environment:
+🏗️ Architecture Overview The deployment consists of five core components that together provide a scalable, reliable, and operationally efficient incident response environment: TheHive (Port 9000) The central Incident Response Platform. It is used by analysts to create, manage, track, and collaborate on security incidents, tasks, and observables. TheHive orchestrates workflows and coordinates case management operations. Cortex (Port 9001) The analysis and automation engine. Cortex executes analyzers and responders to enrich observables (e.g., IPs, URLs, hashes) and automate response actions. TheHive communicates directly with Cortex to trigger analysis jobs and retrieve their results. Cassandra Database (Port 9042) A distributed and scalable NoSQL datastore used by TheHive. All case data, observables, artifacts, and application metadata are stored here. Cassandra ensures high availability and reliable data replication for SOC environments. Elasticsearch (Port 9200) The indexing and search backend. Elasticsearch enables fast, full-text search across incidents, alerts, observables, tasks, and logs. It provides efficient query performance even at scale. Nginx Reverse Proxy (Optional, Port 80/443) Used as a secure web entry point for the platform. It enables HTTPS termination, load balancing (in clustered environments), and centralized access control. In smaller deployments, it simplifies secure browser-based access to TheHive and Cortex interfaces.
 
-TheHive (Port 9000)
-The central Incident Response Platform. It is used by analysts to create, manage, track, and collaborate on security incidents, tasks, and observables. TheHive orchestrates workflows and coordinates case management operations.
-
-Cortex (Port 9001)
-The analysis and automation engine. Cortex executes analyzers and responders to enrich observables (e.g., IPs, URLs, hashes) and automate response actions. TheHive communicates directly with Cortex to trigger analysis jobs and retrieve their results.
-
-Cassandra Database (Port 9042)
-A distributed and scalable NoSQL datastore used by TheHive. All case data, observables, artifacts, and application metadata are stored here. Cassandra ensures high availability and reliable data replication for SOC environments.
-
-Elasticsearch (Port 9200)
-The indexing and search backend. Elasticsearch enables fast, full-text search across incidents, alerts, observables, tasks, and logs. It provides efficient query performance even at scale.
-
-Nginx Reverse Proxy (Optional, Port 80/443)
-Used as a secure web entry point for the platform. It enables HTTPS termination, load balancing (in clustered environments), and centralized access control. In smaller deployments, it simplifies secure browser-based access to TheHive and Cortex interfaces.
 
 🚀 Quick Deployment
 Automated One-Command Installation
@@ -291,7 +276,7 @@ Set up regular maintenance tasks
 Monitor disk space and performance metrics
 
 Backup Strategy
-
+bash
 # Regular configuration backups
 0 2 * * * /root/backup-configs.sh
 
