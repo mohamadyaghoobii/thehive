@@ -203,11 +203,11 @@ pre_cleanup() {
     rm -rf /opt/thehive /opt/thp/thehive /opt/cortex
     rm -rf /var/log/thehive /var/log/cortex
 
-    # Elasticsearch data & logs (assuming this node is dedicated)
+    # Elasticsearch data & logs
     rm -rf /var/lib/elasticsearch/* 2>/dev/null || true
     rm -rf /var/log/elasticsearch/* 2>/dev/null || true
 
-    # Cassandra data & logs (assuming this node is dedicated)
+    # Cassandra data & logs (best effort, may be recreated later)
     rm -rf /var/lib/cassandra/data/* 2>/dev/null || true
     rm -rf /var/lib/cassandra/commitlog/* 2>/dev/null || true
     rm -rf /var/lib/cassandra/saved_caches/* 2>/dev/null || true
@@ -367,7 +367,6 @@ install_cassandra_if_missing() {
 
     log_step "Installing Cassandra (3.11/4.x)..."
 
-    # Assuming Cassandra APT repo is already configured (Apache JFrog mirror on your host)
     if ! apt-get update; then
         log_warn "apt-get update returned non-zero when installing Cassandra. Check your APT sources."
     fi
@@ -376,6 +375,8 @@ install_cassandra_if_missing() {
 
     if dpkg -s cassandra >/dev/null 2>&1; then
         log_ok "Cassandra package installed."
+        # Stop immediately to avoid first boot with default cluster_name
+        systemctl stop cassandra || true
     else
         log_error "Cassandra installation failed. Please install it manually and re-run this script."
         exit 1
@@ -458,7 +459,7 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# CASSANDRA SETUP (RELAXED HEALTH CHECK)
+# CASSANDRA SETUP (WITH HARD RESET TO AVOID CLUSTER_NAME MISMATCH)
 # ---------------------------------------------------------------------------
 setup_cassandra() {
     log_step "Configuring Cassandra database..."
@@ -468,8 +469,24 @@ setup_cassandra() {
         exit 1
     fi
 
+    # Always stop before reconfiguring
     systemctl stop cassandra || true
 
+    # HARD RESET: wipe all Cassandra data & logs so new cluster name is accepted
+    log_info "Hard-resetting Cassandra data and logs..."
+    rm -rf /var/lib/cassandra/data/* \
+           /var/lib/cassandra/commitlog/* \
+           /var/lib/cassandra/saved_caches/* \
+           /var/log/cassandra/*
+
+    mkdir -p /var/lib/cassandra/data \
+             /var/lib/cassandra/commitlog \
+             /var/lib/cassandra/saved_caches \
+             /var/log/cassandra
+
+    chown -R cassandra:cassandra /var/lib/cassandra /var/log/cassandra
+
+    # Backup original config once
     if [[ -f /etc/cassandra/cassandra.yaml && ! -f /etc/cassandra/cassandra.yaml.orig ]]; then
         cp /etc/cassandra/cassandra.yaml /etc/cassandra/cassandra.yaml.orig
         log_info "Backed up /etc/cassandra/cassandra.yaml to /etc/cassandra/cassandra.yaml.orig"
@@ -514,9 +531,6 @@ native_transport_port: 9042
 EOF
 
     chown cassandra:cassandra /etc/cassandra/cassandra.yaml
-
-    mkdir -p /var/lib/cassandra/data /var/lib/cassandra/commitlog /var/lib/cassandra/saved_caches /var/log/cassandra
-    chown -R cassandra:cassandra /var/lib/cassandra /var/log/cassandra
 
     if [[ -f /etc/cassandra/jvm-server.options ]]; then
         log_info "Tuning Cassandra JVM heap in /etc/cassandra/jvm-server.options ..."
@@ -724,7 +738,6 @@ db.janusgraph {
 
     elasticsearch {
       client.sniff = false
-      # http.auth { ... }  # Configure here if Elasticsearch auth is enabled
     }
   }
 
@@ -754,10 +767,6 @@ cortex {
       name = "local-cortex"
       url = "http://127.0.0.1:9001"
 
-      # Once you have created a dedicated API key in Cortex for TheHive,
-      # manually add an "auth" block like the example below. This will
-      # make TheHive authenticate to Cortex using a bearer token.
-      #
       # auth {
       #   type = "bearer"
       #   key  = "YOUR_CORTEX_API_KEY"
@@ -791,7 +800,7 @@ play.filters.cors {
 }
 
 play.filters.hosts {
-  allowed = ["."]
+  allowed = ["."] 
 }
 
 play.server.akka {
@@ -857,7 +866,6 @@ auth.verification {
 
 analyzer {
   urls = [
-    #"https://download.thehive-project.org/analyzers.json"
     "/opt/Cortex-Analyzers/analyzers"
   ]
 
@@ -868,13 +876,11 @@ analyzer {
   }
 
   configs = [
-    # Add analyzer configs and API keys here
   ]
 }
 
 responder {
   urls = [
-    #"https://download.thehive-project.org/responders.json"
     "/opt/Cortex-Analyzers/responders"
   ]
 
