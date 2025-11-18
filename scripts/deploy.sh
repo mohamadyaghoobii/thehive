@@ -649,6 +649,32 @@ install_cortex() {
 }
 
 # ---------------------------------------------------------------------------
+# CORTEX ANALYZERS REPO
+# ---------------------------------------------------------------------------
+install_cortex_analyzers_repo() {
+    log_step "Preparing Cortex-Analyzers repository under /opt..."
+
+    if [[ -d /opt/Cortex-Analyzers/.git ]]; then
+        log_info "Cortex-Analyzers git repository already present. Updating..."
+        (
+          cd /opt/Cortex-Analyzers && \
+          git pull --rebase --stat >/dev/null 2>&1
+        ) || log_warn "Failed to update Cortex-Analyzers repository. Using existing copy."
+    elif [[ -d /opt/Cortex-Analyzers ]]; then
+        log_warn "Directory /opt/Cortex-Analyzers exists but is not a git repository. Leaving as-is."
+    else
+        log_info "Cloning Cortex-Analyzers into /opt/Cortex-Analyzers..."
+        if ! git clone https://github.com/TheHive-Project/Cortex-Analyzers.git /opt/Cortex-Analyzers >/dev/null 2>&1; then
+            log_warn "Failed to clone Cortex-Analyzers from GitHub. Analyzers will not be available unless you provide them manually in /opt/Cortex-Analyzers."
+            return 0
+        fi
+    fi
+
+    chown -R cortex:cortex /opt/Cortex-Analyzers 2>/dev/null || log_warn "Could not chown /opt/Cortex-Analyzers to cortex:cortex. Check permissions manually."
+    log_ok "Cortex-Analyzers directory prepared at /opt/Cortex-Analyzers"
+}
+
+# ---------------------------------------------------------------------------
 # THEHIVE CONFIG
 # ---------------------------------------------------------------------------
 configure_thehive() {
@@ -831,7 +857,8 @@ auth.verification {
 
 analyzer {
   urls = [
-    "https://download.thehive-project.org/analyzers.json"
+    #"https://download.thehive-project.org/analyzers.json"
+    "/opt/Cortex-Analyzers/analyzers"
   ]
 
   fork-join-executor {
@@ -847,7 +874,8 @@ analyzer {
 
 responder {
   urls = [
-    "https://download.thehive-project.org/responders.json"
+    #"https://download.thehive-project.org/responders.json"
+    "/opt/Cortex-Analyzers/responders"
   ]
 
   fork-join-executor {
@@ -1006,7 +1034,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/opt/cortex/data /var/log/cortex
+ReadWritePaths=/opt/cortex/data /var/log/cortex /opt/Cortex-Analyzers
 
 LimitNOFILE=65536
 LimitNPROC=4096
@@ -1054,8 +1082,6 @@ start_services() {
     log_info "Starting Cassandra..."
     systemctl restart cassandra || {
         log_error "Failed to start Cassandra."
-        # Do not exit hard here; TheHive will fail if Cassandra is truly down,
-        # but keeping this as a hard error is usually safer.
         exit 1
     }
     sleep 15
@@ -1377,6 +1403,7 @@ main() {
     setup_cassandra
     install_thehive
     install_cortex
+    install_cortex_analyzers_repo
     configure_thehive
     configure_cortex
     setup_systemd_services
