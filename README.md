@@ -1,4 +1,3 @@
-
 # TheHive & Cortex Enterprise Deployment Platform
 
 ![Platform](https://img.shields.io/badge/Platform-SOC%20Incident%20Response-blue)
@@ -36,7 +35,8 @@ You can deploy the platform in **two ways**:
 6. [Health Checks](#-health-checks)  
 7. [Key Directories](#-key-directories)  
 8. [Production Recommendations](#-production-recommendations)  
-9. [License](#-license)
+9. [Optional: Splunk Integration (setupsh)](#-optional-splunk-integration-setupsh)  
+10. [License](#-license)
 
 ---
 
@@ -139,7 +139,12 @@ sudo -i
 apt-get update
 apt-get upgrade -y
 
-apt-get install -y   curl wget gnupg2 software-properties-common   apt-transport-https ca-certificates   openjdk-11-jdk haveged   python3 python3-pip   git tree jq net-tools lsof
+apt-get install -y \
+  curl wget gnupg2 software-properties-common \
+  apt-transport-https ca-certificates \
+  openjdk-11-jdk haveged \
+  python3 python3-pip \
+  git tree jq net-tools lsof
 ```
 
 Optional: verify resources:
@@ -635,7 +640,12 @@ Environment="CONFIG_FILE=/etc/thehive/application.conf"
 LimitNOFILE=65536
 NoNewPrivileges=yes
 
-ExecStart=/opt/thehive/bin/thehive   -Dconfig.file=/etc/thehive/application.conf   -Dhttp.address=0.0.0.0   -Dhttp.port=9000   -Dplay.server.pidfile.path=/dev/null   -Dlogger.file=/etc/thehive/logback.xml
+ExecStart=/opt/thehive/bin/thehive \
+  -Dconfig.file=/etc/thehive/application.conf \
+  -Dhttp.address=0.0.0.0 \
+  -Dhttp.port=9000 \
+  -Dplay.server.pidfile.path=/dev/null \
+  -Dlogger.file=/etc/thehive/logback.xml
 
 Restart=on-failure
 RestartSec=10s
@@ -679,7 +689,11 @@ ReadWritePaths=/opt/cortex/data /var/log/cortex
 LimitNOFILE=65536
 LimitNPROC=4096
 
-ExecStart=/opt/cortex/bin/cortex   -Dconfig.file=/etc/cortex/application.conf   -Dlogger.file=/etc/cortex/logback.xml   -Dpidfile.path=/dev/null   -Djava.security.egd=file:/dev/./urandom
+ExecStart=/opt/cortex/bin/cortex \
+  -Dconfig.file=/etc/cortex/application.conf \
+  -Dlogger.file=/etc/cortex/logback.xml \
+  -Dpidfile.path=/dev/null \
+  -Djava.security.egd=file:/dev/./urandom
 
 StandardOutput=journal
 StandardError=journal
@@ -836,6 +850,91 @@ journalctl -u thehive      -n 50 --no-pager
   - Cassandra data
   - Elasticsearch indices
   - TheHive files (`/opt/thp/thehive`)
+
+---
+
+## 🔌 Optional: Splunk Integration (`setup.sh`)
+
+The repository also provides an optional helper script named `setup.sh` to integrate **TheHive** with **Splunk** using the official `TA-thehive-cortex` add-on.
+
+### What `setup.sh` does
+
+When executed on the **Splunk / TheHive host**, `setup.sh` will:
+
+1. Ask you for the TheHive FQDN (for example: `thehive.example.com`).
+2. Generate a **self-signed TLS certificate** and key for Nginx (if `/etc/ssl/certs/thehive.crt` and `/etc/ssl/private/thehive.key` do not already exist).
+3. Configure an **Nginx reverse proxy** for TheHive:
+   - Listens on `443` (HTTPS).
+   - Forwards traffic to `http://127.0.0.1:9000`.
+4. Prepare the **TA-thehive-cortex** app on Splunk:
+   - Ensure the app directory under `/opt/splunk/etc/apps/TA-thehive-cortex` has correct ownership (`splunk:splunk`).
+   - Create the `lookups/` directory (if missing).
+   - Create an **empty** lookup file:  
+     `/opt/splunk/etc/apps/TA-thehive-cortex/lookups/thehive_cortex_instances.csv`  
+     > This file is intentionally left empty. The TheHive/TA UI will populate it with instance definitions.
+5. Configure the **TheHive Alerts & Cases** data input:
+   - Creates or updates `/opt/splunk/etc/apps/TA-thehive-cortex/local/inputs.conf`.
+   - Adds the stanza:
+
+     ```ini
+     [thehive_alerts_cases://thehive_alerts_cases]
+     instance_id = aa9d6b2a
+     type = alerts_cases
+     index = thehive
+     sourcetype = thehive:alerts_cases
+     disabled = 0
+     ```
+
+   - `instance_id` here is just a sample ID; it must match the ID used by the TA in your environment.
+6. Append the generated TheHive certificate to **certifi's** `cacert.pem` file inside the TA:
+   - Path used by the script:  
+     `/opt/splunk/etc/apps/TA-thehive-cortex/bin/ta_thehive_cortex/aob_py3/certifi/cacert.pem`
+   - A timestamped backup of `cacert.pem` is created before modification.
+7. Clean temporary Splunk lookup/KVS directories (optional) and restart Splunk.
+
+### Prerequisites for `setup.sh`
+
+- Splunk installed at `/opt/splunk`.
+- `TA-thehive-cortex` already installed under `/opt/splunk/etc/apps/TA-thehive-cortex`.
+- Nginx installed (script will skip Nginx configuration if `nginx` is not found).
+- Run the script as `root` (or via `sudo`).
+
+### How to run it
+
+```bash
+wget -O setup.sh https://your-repo-url.example.com/setup.sh
+chmod +x setup.sh
+sudo ./setup.sh
+```
+
+During execution you will be prompted for:
+
+```text
+Enter TheHive FQDN (default: thehive.example.com):
+```
+
+Use the same FQDN that Splunk and your browsers will use to reach TheHive (for example: `thehive.yourcompany.local`).
+
+After the script completes:
+
+- Test access to TheHive through Nginx:
+
+  ```bash
+  curl -sk https://<thehive-fqdn>/api/v1/status
+  ```
+
+- In Splunk Search, verify the lookup file (once the TA UI has written an instance):
+
+  ```spl
+  | inputlookup thehive_cortex_instances
+  ```
+
+- In Splunk Web, verify the Data Input:
+  - **Settings → Data inputs → TheHive: Alerts & Cases**
+  - Ensure `thehive_alerts_cases` is enabled and configured with the correct `instance_id` and `index`.
+
+> Note: You still need to configure the **TheHive API key** in Splunk UI under  
+> **Apps → TA-thehive-cortex → Configuration → Account** and ensure `account_name` and `instance_id` are consistent with what the TA uses internally.
 
 ---
 
