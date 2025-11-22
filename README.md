@@ -11,7 +11,8 @@ This environment supports incident response, automated enrichment, collaboration
 You can deploy the platform in **two ways**:
 
 1. **Automated deployment** using `deploy.sh`  
-2. **Manual installation** (fully documented step-by-step)
+2. **Manual installation** (fully documented step-by-step)  
+3. Optional **Splunk integration** using `setup_thehive.sh`
 
 ---
 
@@ -35,7 +36,7 @@ You can deploy the platform in **two ways**:
 6. [Health Checks](#-health-checks)  
 7. [Key Directories](#-key-directories)  
 8. [Production Recommendations](#-production-recommendations)  
-9. [Optional: Splunk Integration (setupsh)](#-optional-splunk-integration-setupsh)  
+9. [Optional: Splunk Integration (setup_thehive.sh)](#-optional-splunk-integration-setup_thehivesh)  
 10. [License](#-license)
 
 ---
@@ -853,88 +854,157 @@ journalctl -u thehive      -n 50 --no-pager
 
 ---
 
-## 🔌 Optional: Splunk Integration (`setup.sh`)
+## 🔌 Optional: Splunk Integration (`setup_thehive.sh`)
 
-The repository also provides an optional helper script named `setup.sh` to integrate **TheHive** with **Splunk** using the official `TA-thehive-cortex` add-on.
+The repository also provides an optional helper script named `setup_thehive.sh` to integrate **TheHive** with **Splunk** using the official `TA-thehive-cortex` add-on.
 
-### What `setup.sh` does
+### What `setup_thehive.sh` does
 
-When executed on the **Splunk / TheHive host**, `setup.sh` will:
+When executed on the **Splunk / TheHive host**, `setup_thehive.sh` will:
 
-1. Ask you for the TheHive FQDN (for example: `thehive.example.com`).
-2. Generate a **self-signed TLS certificate** and key for Nginx (if `/etc/ssl/certs/thehive.crt` and `/etc/ssl/private/thehive.key` do not already exist).
-3. Configure an **Nginx reverse proxy** for TheHive:
+1. Ask you for the **TheHive FQDN** (for example: `thehive.example.com`).
+2. Ask you for the **TheHive org admin name** (used only in the TLS certificate subject).
+3. Check for an existing TLS certificate and key:
+   - Certificate: `/etc/ssl/certs/thehive.crt`  
+   - Key: `/etc/ssl/private/thehive.key`
+4. If those files do not exist, generate a **self-signed TLS certificate** and key for Nginx and save them to the paths above.
+5. Configure an **Nginx reverse proxy** for TheHive:
    - Listens on `443` (HTTPS).
-   - Forwards traffic to `http://127.0.0.1:9000`.
-4. Prepare the **TA-thehive-cortex** app on Splunk:
-   - Ensure the app directory under `/opt/splunk/etc/apps/TA-thehive-cortex` has correct ownership (`splunk:splunk`).
-   - Create the `lookups/` directory (if missing).
-   - Create an **empty** lookup file:  
-     `/opt/splunk/etc/apps/TA-thehive-cortex/lookups/thehive_cortex_instances.csv`  
-     > This file is intentionally left empty. The TheHive/TA UI will populate it with instance definitions.
-5. Configure the **TheHive Alerts & Cases** data input:
-   - Creates or updates `/opt/splunk/etc/apps/TA-thehive-cortex/local/inputs.conf`.
-   - Adds the stanza:
+   - Proxies all traffic to `http://127.0.0.1:9000`.
+   - Sets common proxy headers and HSTS.
+6. Prepare the **TA-thehive-cortex** app on Splunk:
+   - Ensures the app directory under `/opt/splunk/etc/apps/TA-thehive-cortex` exists.
+   - Fixes ownership to `splunk:splunk`.
+   - Creates the `lookups/` directory if it does not exist.
+   - Creates an **empty** lookup file:
 
-     ```ini
-     [thehive_alerts_cases://thehive_alerts_cases]
-     instance_id = aa9d6b2a
-     type = alerts_cases
-     index = thehive
-     sourcetype = thehive:alerts_cases
-     disabled = 0
+     ```text
+     /opt/splunk/etc/apps/TA-thehive-cortex/lookups/thehive_cortex_instances.csv
      ```
 
-   - `instance_id` here is just a sample ID; it must match the ID used by the TA in your environment.
-6. Append the generated TheHive certificate to **certifi's** `cacert.pem` file inside the TA:
-   - Path used by the script:  
-     `/opt/splunk/etc/apps/TA-thehive-cortex/bin/ta_thehive_cortex/aob_py3/certifi/cacert.pem`
-   - A timestamped backup of `cacert.pem` is created before modification.
-7. Clean temporary Splunk lookup/KVS directories (optional) and restart Splunk.
+     > The file is intentionally created **without header or rows**.  
+     > The Splunk TA UI will populate this CSV when you define a TheHive instance.
+7. Restart Splunk via `/opt/splunk/bin/splunk restart`.
 
-### Prerequisites for `setup.sh`
+> The script does **not**:
+> - Create any `inputs.conf` stanzas.  
+> - Create alerts or saved searches.  
+> - Configure API keys, accounts, or credentials.  
+> These are all done manually in the Splunk and TheHive UIs.
+
+### Prerequisites for `setup_thehive.sh`
 
 - Splunk installed at `/opt/splunk`.
-- `TA-thehive-cortex` already installed under `/opt/splunk/etc/apps/TA-thehive-cortex`.
-- Nginx installed (script will skip Nginx configuration if `nginx` is not found).
-- Run the script as `root` (or via `sudo`).
+- `TA-thehive-cortex` already installed under:
 
-### How to run it
+  ```text
+  /opt/splunk/etc/apps/TA-thehive-cortex
+  ```
+
+- Nginx installed and enabled (script will skip Nginx configuration if `nginx` is not found in `PATH`).
+- TheHive running on `http://127.0.0.1:9000` on the same host (for the reverse proxy).
+- Script must be run as `root` (or with `sudo`).
+
+### How to run `setup_thehive.sh`
 
 ```bash
-wget -O setup.sh https://your-repo-url.example.com/setup.sh
-chmod +x setup.sh
-sudo ./setup.sh
+wget -O setup_thehive.sh https://your-repo-url.example.com/setup_thehive.sh
+chmod +x setup_thehive.sh
+sudo ./setup_thehive.sh
 ```
 
-During execution you will be prompted for:
+During execution, you will see prompts similar to:
 
 ```text
 Enter TheHive FQDN (default: thehive.example.com):
+Enter TheHive org admin name (default: orgadmin):
 ```
 
-Use the same FQDN that Splunk and your browsers will use to reach TheHive (for example: `thehive.yourcompany.local`).
+Use the same FQDN that Splunk and your browsers will use to reach TheHive  
+(for example: `thehive.yourcompany.local`).
 
-After the script completes:
+---
 
-- Test access to TheHive through Nginx:
+### Manual steps after running `setup_thehive.sh`
 
-  ```bash
-  curl -sk https://<thehive-fqdn>/api/v1/status
-  ```
+The script only prepares Nginx and the TA lookup path.  
+The following **must be done manually** from the UIs:
 
-- In Splunk Search, verify the lookup file (once the TA UI has written an instance):
+#### 1. Install and configure the TA in Splunk
 
-  ```spl
-  | inputlookup thehive_cortex_instances
-  ```
+1. Log into Splunk Web.
+2. Go to **Apps → Manage Apps → Install app from file**.
+3. Upload and install the `TA-thehive-cortex_*.tgz` package.
+4. After installation, go to: **Apps → TA-thehive-cortex → Configuration → Account**.
+5. Click **Add new** and create an account:
+   - **Account name**: e.g. `thehive`
+   - **Username**: arbitrary label (not used if you use API key)
+   - **Password**: TheHive API key (generated from TheHive UI)
+6. Save.
 
-- In Splunk Web, verify the Data Input:
-  - **Settings → Data inputs → TheHive: Alerts & Cases**
-  - Ensure `thehive_alerts_cases` is enabled and configured with the correct `instance_id` and `index`.
+#### 2. Define a TheHive instance in the TA (populates the CSV)
 
-> Note: You still need to configure the **TheHive API key** in Splunk UI under  
-> **Apps → TA-thehive-cortex → Configuration → Account** and ensure `account_name` and `instance_id` are consistent with what the TA uses internally.
+1. In Splunk Web, within **TA-thehive-cortex**, open the page for TheHive instances (e.g. **Configuration → TheHive Instances**).
+2. Add a new instance and fill in:
+   - **Host / URL**: `https://<your-hive-fqdn>`
+   - **Port**: `443`
+   - **Protocol**: `https`
+   - **Account name**: the one you created in step 1 (e.g. `thehive`)
+   - **Verify TLS**: as needed (`true` for trusted certs, `false` for lab only)
+3. Save the instance.
+
+After saving, the TA writes a row into:
+
+```text
+/opt/splunk/etc/apps/TA-thehive-cortex/lookups/thehive_cortex_instances.csv
+```
+
+You can verify from Splunk Search:
+
+```spl
+| inputlookup thehive_cortex_instances
+```
+
+You should now see one row describing your TheHive instance.
+
+#### 3. Create the “TheHive: Alerts & Cases” Data Input (UI)
+
+1. In Splunk Web, go to **Settings → Data inputs**.
+2. Find and click **TheHive: Alerts & Cases**.
+3. Click **New Local Input** (or similar).
+4. Configure:
+   - **Name**: e.g. `thehive_alerts_cases`
+   - **Instance ID**: use the same ID the TA assigned to your instance (visible in the instance page or in the lookup).
+   - **Type**: `alerts_cases`
+   - **Index**: `thehive` (or any index you prefer)
+   - **Sourcetype**: `thehive:alerts_cases`
+5. Save and enable the input.
+
+At this point, Splunk will start pulling alerts and cases from TheHive according to the TA’s polling logic.
+
+#### 4. Create alerts in Splunk (optional, manual)
+
+If you want Splunk to **push** alerts to TheHive:
+
+1. Run a test search in Splunk, for example:
+
+   ```spl
+   index=_internal | head 1
+   ```
+
+2. Click **Save As → Alert**.
+3. Set:
+   - Title: e.g. `test_splunk_to_thehive`
+   - Alert type: `Once` or `Scheduled` (e.g. every 5 minutes for testing)
+   - Trigger condition: `Always` (for a simple test)
+4. Under **Trigger Actions**, enable **TheHive - Create a new alert**.
+5. Select the appropriate TheHive instance and fill any required fields (title, description, severity).
+6. Save the alert.
+
+After it fires:
+
+- Log into TheHive.
+- Go to **Alerts** and check that `test_splunk_to_thehive` (or your chosen name) appears.
 
 ---
 
